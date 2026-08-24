@@ -1,0 +1,21 @@
+{
+  "name": "camdrum-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Simple Energy Testing & Validation Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "googleapis": "^173.0.0",
+    "multer": "^2.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

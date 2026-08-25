@@ -496,13 +496,31 @@ async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, av
   }
 }
 
+function getGoogleCredentials() {
+  if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    try {
+      return JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+    } catch (e) {
+      console.error('Error parsing GOOGLE_CREDENTIALS_JSON env:', e);
+    }
+  }
+  const credentialsPath = path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials-tv.json');
+  if (fs.existsSync(credentialsPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+    } catch (e) {
+      console.error('Error reading credentials file:', e);
+    }
+  }
+  return null;
+}
+
 async function getGoogleSheetsTabs(system) {
   try {
-    const credentialsPath = path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials-tv.json');
-    if (!fs.existsSync(credentialsPath)) {
+    const credentials = getGoogleCredentials();
+    if (!credentials) {
       return ['overall', 'summary', '5kwh', '3.7kwh'];
     }
-    const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
     const auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -510,6 +528,7 @@ async function getGoogleSheetsTabs(system) {
     
     const sheets = google.sheets({ version: 'v4', auth });
     const sheetId = getGoogleSheetIdForSystem(system);
+    if (!sheetId) return ['overall', 'summary', '5kwh', '3.7kwh'];
 
     const res = await sheets.spreadsheets.get({
       spreadsheetId: sheetId,
@@ -524,11 +543,10 @@ async function getGoogleSheetsTabs(system) {
 }
 
 async function getGoogleSheetsData(requestedSheet, system) {
-  const credentialsPath = path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials-tv.json');
-  if (!fs.existsSync(credentialsPath)) {
-    throw new Error(`Google credentials file not found at ${credentialsPath}`);
+  const credentials = getGoogleCredentials();
+  if (!credentials) {
+    throw new Error(`Google credentials not configured. Please set GOOGLE_CREDENTIALS_JSON or place google-credentials-tv.json.`);
   }
-  const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
   const auth = new google.auth.GoogleAuth({
     credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -536,6 +554,9 @@ async function getGoogleSheetsData(requestedSheet, system) {
   
   const sheets = google.sheets({ version: 'v4', auth });
   const sheetId = getGoogleSheetIdForSystem(system);
+  if (!sheetId) {
+    throw new Error(`Sheet ID not configured for system: ${system}`);
+  }
   
   let availableTitles = ['summary'];
   try {

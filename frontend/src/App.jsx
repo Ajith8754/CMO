@@ -7,7 +7,7 @@ import {
   Calendar, CalendarCheck
 } from 'lucide-react';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://cmo-backend-oqif.onrender.com');
 
 // Multi-point trend chart representing the entire Excel dataset
 function TimelineChart({ dataset, systemKey, metricKey, activeHour, color, label, unit, min, max }) {
@@ -174,7 +174,7 @@ export default function App() {
   const fetchTvSheets = async () => {
     try {
       const systemParam = view ? `?system=${view}` : '';
-      const res = await fetch(`http://localhost:5000/api/tv-sheets${systemParam}`);
+      const res = await fetch(`${BACKEND_URL}/api/tv-sheets${systemParam}`);
       const json = await res.json();
       if (json.success && json.sheets && json.sheets.length > 0) {
         setAvailableSheets(json.sheets);
@@ -193,7 +193,7 @@ export default function App() {
       if (!isSync) setTvLoading(true);
       const queryParam = sheet ? `?sheet=${encodeURIComponent(sheet)}` : '';
       const systemParam = view ? `${queryParam ? '&' : '?'}system=${view}` : '';
-      const res = await fetch(`http://localhost:5000/api/tv-data${queryParam}${systemParam}`);
+      const res = await fetch(`${BACKEND_URL}/api/tv-data${queryParam}${systemParam}`);
       const json = await res.json();
       if (json.success) {
         if (isSync && tvRecords.length > 0 && json.records.length > tvRecords.length) {

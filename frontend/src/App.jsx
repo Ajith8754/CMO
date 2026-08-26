@@ -171,28 +171,29 @@ export default function App() {
   const [selectedSheet, setSelectedSheet] = useState('');
   const [selectedVehicle, setSelectedVehicle] = useState(''); // '', '3.7 kW', '5 kW', '6.5 kW'
 
-  const fetchTvSheets = async () => {
+  const fetchTvSheets = async (targetView = view) => {
     try {
-      const systemParam = view ? `?system=${view}` : '';
+      const systemParam = targetView ? `?system=${targetView}` : '';
       const res = await fetch(`${BACKEND_URL}/api/tv-sheets${systemParam}`);
       const json = await res.json();
       if (json.success && json.sheets && json.sheets.length > 0) {
         setAvailableSheets(json.sheets);
-        if (!selectedSheet || !json.sheets.includes(selectedSheet)) {
-          const summaryTab = json.sheets.find(s => s.toLowerCase() === 'summary');
-          setSelectedSheet(summaryTab || json.sheets[0]);
-        }
+        const summaryTab = json.sheets.find(s => s.toLowerCase() === 'summary');
+        const defaultSheet = summaryTab || json.sheets[0];
+        setSelectedSheet(defaultSheet);
+        return defaultSheet;
       }
     } catch (err) {
       console.error('Error fetching sheet list:', err);
     }
+    return '';
   };
 
-  const fetchTvData = async (isSync = false, sheet = selectedSheet) => {
+  const fetchTvData = async (isSync = false, sheet = selectedSheet, targetView = view) => {
     try {
       if (!isSync) setTvLoading(true);
       const queryParam = sheet ? `?sheet=${encodeURIComponent(sheet)}` : '';
-      const systemParam = view ? `${queryParam ? '&' : '?'}system=${view}` : '';
+      const systemParam = targetView ? `${queryParam ? '&' : '?'}system=${targetView}` : '';
       const res = await fetch(`${BACKEND_URL}/api/tv-data${queryParam}${systemParam}`);
       const json = await res.json();
       if (json.success) {
@@ -223,29 +224,19 @@ export default function App() {
     }
   };
 
-  // Auto-select corresponding Google Sheet tab on view transition
-  useEffect(() => {
-    if (view === 'camdrum') {
-      const match = availableSheets.find(s => s.toLowerCase() === 'camdrum' || s.toLowerCase() === 'camdrom');
-      if (match) setSelectedSheet(match);
-    } else if (view === 'mechanical') {
-      const match = availableSheets.find(s => s.toLowerCase() === 'mechanical');
-      if (match) setSelectedSheet(match);
-    } else if (view === 'ord') {
-      const match = availableSheets.find(s => s.toLowerCase() === 'ord');
-      if (match) setSelectedSheet(match);
-    }
-  }, [view, availableSheets]);
-
+  // Switch Google Sheets data automatically on card view change
   useEffect(() => {
     const isTvView = ['camdrum', 'mechanical', 'ord'].includes(view);
     if (isTvView || activeTab === 'spreadsheet') {
-      fetchTvSheets();
-      fetchTvData(false, selectedSheet);
-      setTvCurrentPage(1);
-      setTvSearchQuery('');
+      (async () => {
+        setTvLoading(true);
+        const defaultSheet = await fetchTvSheets(view);
+        await fetchTvData(false, defaultSheet, view);
+        setTvCurrentPage(1);
+        setTvSearchQuery('');
+      })();
     }
-  }, [view, activeTab, selectedSheet]);
+  }, [view, activeTab]);
 
   useEffect(() => {
     const isTvView = ['camdrum', 'mechanical', 'ord'].includes(view);
@@ -553,7 +544,7 @@ export default function App() {
   const activeIndex = timeline.indexOf(activeHour);
   const playState = statusData.playbackState || { playing: false, speed: 'simulated', playbackSpeedMs: 3000 };
   const currentSystems = statusData.systems || { camdrum: {}, mechanical: {}, ord: {} };
-  const isMechanical = view === 'mechanical';
+  const isMechanical = view === 'mechanical' || view === 'ord';
 
   // Global search and vehicle variant filtered list
   const filteredList = tvRecords.filter(r => {
@@ -831,40 +822,21 @@ export default function App() {
               </button>
             </div>
 
-            {view === 'ord' ? (
-              <div className="sub-page-content">
-                <div className="upcoming-container">
-                  <div className="upcoming-card">
-                    <div className="upcoming-icon-wrapper">
-                      <Clock className="upcoming-icon" size={36} color="#00ff87" />
-                    </div>
-                    <h2 className="upcoming-title">ORD Integration</h2>
-                    <p className="upcoming-subtitle">
-                      Dynamometer load, speed, power & coolant flow telemetry modules are under development. Coming Soon!
-                    </p>
-                    <button 
-                      className="btn-secondary" 
-                      onClick={() => setView('dashboard')} 
-                      style={{ marginTop: '2rem', padding: '0.75rem 1.5rem', borderColor: 'rgba(0, 255, 135, 0.3)', gap: '0.5rem', display: 'flex', alignItems: 'center' }}
-                    >
-                      <ArrowLeft size={16} />
-                      <span>Back to Hub</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : ['camdrum', 'mechanical'].includes(view) ? (
+            {['camdrum', 'mechanical', 'ord'].includes(view) ? (
               <div className="sub-page-content">
                 {/* T&V Dashboard Header */}
                 <div className="tv-header">
                   <div className="tv-title-wrapper">
                     <div className="tv-title-row">
                       <div className="tv-title-icon" style={{
-                        background: view === 'camdrum' ? 'linear-gradient(135deg, var(--color-accent), #7b00ff)' 
-                                  : 'linear-gradient(135deg, #00f0ff, #0072ff)',
-                        boxShadow: '0 0 12px rgba(0, 240, 255, 0.25)'
+                        background: view === 'camdrum' 
+                          ? 'linear-gradient(135deg, var(--color-accent), #7b00ff)' 
+                          : (view === 'mechanical' 
+                              ? 'linear-gradient(135deg, #00f0ff, #0072ff)' 
+                              : 'linear-gradient(135deg, #00ff87, #00b050)'),
+                        boxShadow: view === 'ord' ? '0 0 12px rgba(0, 255, 135, 0.25)' : '0 0 12px rgba(0, 240, 255, 0.25)'
                       }} />
-                      <h1 className="tv-title">{view === 'camdrum' ? 'CAMDRUM' : 'MECHANICAL'} Details</h1>
+                      <h1 className="tv-title">{view === 'camdrum' ? 'CAMDRUM' : (view === 'mechanical' ? 'MECHANICAL' : 'ORD')} Details</h1>
                     </div>
                     <p className="tv-subtitle">
                       Real-time test data analytics — synced from Google Sheets (Sync in {syncCountdown}s)

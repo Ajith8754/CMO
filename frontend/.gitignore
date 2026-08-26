@@ -1,3 +1,22 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Production Builds
+dist/
+**/dist/
+dist-ssr/
+
+# Sensitive credentials and secrets
+backend/google-credentials-tv.json
+google-credentials-tv.json
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+backend/.env
+
 # Logs
 logs
 *.log
@@ -5,17 +24,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Editor
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*

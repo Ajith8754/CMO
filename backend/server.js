@@ -504,12 +504,22 @@ function getGoogleCredentials() {
       console.error('Error parsing GOOGLE_CREDENTIALS_JSON env:', e);
     }
   }
-  const credentialsPath = path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH || './google-credentials-tv.json');
-  if (fs.existsSync(credentialsPath)) {
-    try {
-      return JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-    } catch (e) {
-      console.error('Error reading credentials file:', e);
+  
+  const possiblePaths = [
+    process.env.GOOGLE_CREDENTIALS_PATH ? path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH) : null,
+    process.env.GOOGLE_CREDENTIALS_PATH,
+    path.resolve(__dirname, './google-credentials-tv.json'),
+    path.resolve(__dirname, '../google-credentials-tv.json'),
+    '/etc/secrets/google-credentials-tv.json'
+  ].filter(Boolean);
+
+  for (const credPath of possiblePaths) {
+    if (fs.existsSync(credPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(credPath, 'utf8'));
+      } catch (e) {
+        console.error(`Error reading credentials file at ${credPath}:`, e);
+      }
     }
   }
   return null;

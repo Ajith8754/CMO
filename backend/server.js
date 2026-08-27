@@ -437,7 +437,7 @@ function getGoogleSheetIdForSystem(system) {
 
 async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, availableSheets) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const variants = ['5kwh', '3.7kwh'];
+  const variants = ['5kwh', '3.7kwh', '3kwh'];
   
   for (const variant of variants) {
     const tabName = availableSheets.find(t => t.toLowerCase() === variant);

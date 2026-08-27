@@ -550,32 +550,19 @@ export default function App() {
   const filteredList = tvRecords.filter(r => {
     // 1. Filter by vehicle variant
     if (selectedVehicle) {
-      const vehicleModel = getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model', 'TEST COMPONENT', 'Test Component', 'test component', 'Component']).toLowerCase();
-      const slNo = parseInt(getFieldValue(r, ['SL NO', 'Sl No', 'sl no'])) || 0;
       const kwValue = selectedVehicle.replace(/[^0-9.]/g, '');
-      let isMatch = vehicleModel.includes(kwValue) || vehicleModel.includes(selectedVehicle.toLowerCase());
-      if (!isMatch && vehicleModel) {
-        if (kwValue === '3.7' && slNo % 3 === 1) isMatch = true;
-        if (kwValue === '5' && slNo % 3 === 2) isMatch = true;
-        if (kwValue === '6.5' && slNo % 3 === 0) isMatch = true;
-      }
+      const isMatch = Object.values(r).some(val => 
+        String(val).toLowerCase().includes(kwValue) || 
+        String(val).toLowerCase().includes(selectedVehicle.toLowerCase())
+      );
       if (!isMatch) return false;
     }
 
     // 2. Filter by search query
     if (tvSearchQuery) {
       const query = tvSearchQuery.toLowerCase();
-      return (
-        getFieldValue(r, ['SL NO', 'Sl No', 'sl no', 'Serial Number']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['Testing Group', 'Testing group', 'testing group', 'TESTING GROUP']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['TEST COMPONENT', 'Test Component', 'test component', 'Component']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['REPORT NUMBER', 'Report Number', 'report number', 'Number', 'number']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['TEST NAME', 'Test Name', 'test name']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER', 'Engineer']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['REPORT DATE', 'Report Date', 'report date']).toLowerCase().includes(query) ||
-        getFieldValue(r, ['TEST DECISION', 'TEST STATUS', 'Decision', 'Status']).toLowerCase().includes(query)
-      );
+      const isMatch = Object.values(r).some(val => String(val).toLowerCase().includes(query));
+      if (!isMatch) return false;
     }
     return true;
   });
@@ -1099,7 +1086,7 @@ export default function App() {
                             <div className="tv-chart-body">
                               {tvChartType === 'donut' && (() => {
                                 if (view === 'camdrum') {
-                                  const targetVal = 1300;
+                                  const targetVal = tvTargetRange;
                                   const achPercent = Math.min(100, (range / targetVal) * 100);
                                   return (
                                     <div className="tv-chart-donut-wrapper">
@@ -1165,15 +1152,15 @@ export default function App() {
                               {tvChartType === 'bar' && (
                                 <div className="tv-bar-chart-container">
                                   <div className="tv-bar-chart-axis-y">
-                                    <span>{view === 'camdrum' ? 1300 : total}</span>
-                                    <span>{view === 'camdrum' ? 650 : Math.round(total / 2)}</span>
+                                    <span>{view === 'camdrum' ? tvTargetRange : total}</span>
+                                    <span>{view === 'camdrum' ? Math.round(tvTargetRange / 2) : Math.round(total / 2)}</span>
                                     <span>0</span>
                                   </div>
                                   <div className="tv-bar-chart-bars">
                                     {view === 'camdrum' ? (
                                       <>
                                         <div className="tv-bar-wrapper">
-                                          <div className="tv-bar-value">1300</div>
+                                          <div className="tv-bar-value">{tvTargetRange}</div>
                                           <div 
                                             className="tv-bar bar-total" 
                                             style={{ height: '100%', background: 'linear-gradient(180deg, #4d5dfb 0%, rgba(77, 93, 251, 0.2) 100%)', boxShadow: '0 0 10px rgba(77, 93, 251, 0.15)' }}
@@ -1184,7 +1171,7 @@ export default function App() {
                                           <div className="tv-bar-value">{range}</div>
                                           <div 
                                             className="tv-bar bar-passed" 
-                                            style={{ height: `${Math.min(100, (range / 1300) * 100)}%`, background: 'linear-gradient(180deg, #00ff87 0%, rgba(0, 255, 135, 0.2) 100%)', boxShadow: '0 0 10px rgba(0, 255, 135, 0.15)' }}
+                                            style={{ height: `${Math.min(100, (range / tvTargetRange) * 100)}%`, background: 'linear-gradient(180deg, #00ff87 0%, rgba(0, 255, 135, 0.2) 100%)', boxShadow: '0 0 10px rgba(0, 255, 135, 0.15)' }}
                                           />
                                           <div className="tv-bar-label">Daily Achieve</div>
                                         </div>
@@ -1358,9 +1345,9 @@ export default function App() {
                             <Clock className="tv-stat-watermark" size={48} />
                           </div>
 
-                          {/* Box 5: CURRENT RANGE */}
+                          {/* Box 5: DAILY RANGE */}
                           <div className="tv-stat-card">
-                            <span className="tv-stat-label">CURRENT RANGE</span>
+                            <span className="tv-stat-label">DAILY RANGE</span>
                             <span className="tv-stat-num purple">
                               {currentRange} <span style={{ fontSize: '1rem', fontWeight: '500', color: 'var(--text-secondary)' }}>km</span>
                             </span>
@@ -1439,6 +1426,7 @@ export default function App() {
                             onChange={(e) => {
                               setSelectedSheet(e.target.value);
                               setTvCurrentPage(1);
+                              fetchTvData(false, e.target.value, view);
                             }}
                             className="tv-select-dropdown"
                             title="Select worksheet tab from Google Sheets"

@@ -444,41 +444,50 @@ async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, av
     if (!tabName) continue;
     
     try {
-      const checkRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: `'${tabName}'!A2:A10`,
+      const variantText = variant.replace('kwh', '').trim();
+      const filtered = summaryRecords.filter(r => {
+        const modelVal = getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model']).toLowerCase();
+        return modelVal.includes(variantText) || modelVal.includes(variant);
       });
-      const rows = checkRes.data.values || [];
-      if (rows.length === 0) {
-        const variantText = variant.replace('kwh', '').trim();
-        const filtered = summaryRecords.filter(r => {
-          const modelVal = getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model']).toLowerCase();
-          return modelVal.includes(variantText) || modelVal.includes(variant);
+      
+      if (filtered.length > 0) {
+        const headers = [
+          'SL NO', 'Vehicle Model', 'Test Component', 'Test Type', 'Test Name',
+          'Requested By', 'Test Engineer', 'Test Status', 'Test Date', 'Report Date',
+          'Issue & Observation', 'Remarks'
+        ];
+        
+        const valuesToWrite = [headers];
+        filtered.forEach((r, idx) => {
+          valuesToWrite.push([
+            String(idx + 1),
+            getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model']),
+            getFieldValue(r, ['TEST COMPONENT', 'Test Component', 'test component', 'Component']),
+            getFieldValue(r, ['TEST TYPE', 'Test Type', 'test type', 'Type']),
+            getFieldValue(r, ['TEST NAME', 'Test Name', 'test name']),
+            getFieldValue(r, ['REQUESTED BY', 'Requested By', 'Requested by', 'Requester By']),
+            getFieldValue(r, ['TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER', 'Engineer']),
+            getFieldValue(r, ['TEST STATUS', 'TEST DECISION', 'Decision', 'Status']),
+            getFieldValue(r, ['TEST DATE', 'Test Date', 'test date', 'Date']),
+            getFieldValue(r, ['REPORT DATE', 'Report Date', 'report date']),
+            getFieldValue(r, ['ISSUE & OBSERVATION', 'Issue & Observation', 'issue & observation', 'Issue', 'Observation']),
+            getFieldValue(r, ['REMARKS', 'Remarks', 'remarks', 'Comments', 'Note'])
+          ]);
         });
         
-        if (filtered.length > 0) {
-          const headers = [
-            'SL NO', 'Vehicle Model', 'Test Component', 'Test Type', 'Test Name',
-            'Requested By', 'Test Engineer', 'Test Status', 'Test Date', 'Report Date',
-            'Issue & Observation', 'Remarks'
-          ];
-          
-          const valuesToWrite = [headers];
-          filtered.forEach((r, idx) => {
-            valuesToWrite.push([
-              String(idx + 1),
-              getFieldValue(r, ['VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model']),
-              getFieldValue(r, ['TEST COMPONENT', 'Test Component', 'test component', 'Component']),
-              getFieldValue(r, ['TEST TYPE', 'Test Type', 'test type', 'Type']),
-              getFieldValue(r, ['TEST NAME', 'Test Name', 'test name']),
-              getFieldValue(r, ['REQUESTED BY', 'Requested By', 'Requested by', 'Requester By']),
-              getFieldValue(r, ['TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER', 'Engineer']),
-              getFieldValue(r, ['TEST STATUS', 'TEST DECISION', 'Decision', 'Status']),
-              getFieldValue(r, ['TEST DATE', 'Test Date', 'test date', 'Date']),
-              getFieldValue(r, ['REPORT DATE', 'Report Date', 'report date']),
-              getFieldValue(r, ['ISSUE & OBSERVATION', 'Issue & Observation', 'issue & observation', 'Issue', 'Observation']),
-              getFieldValue(r, ['REMARKS', 'Remarks', 'remarks', 'Comments', 'Note'])
-            ]);
+        // Fetch existing rows to see if we actually need an update
+        const checkRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `'${tabName}'!A:L`,
+        });
+        const existingRows = checkRes.data.values || [];
+        
+        // Simple length check or basic stringify check
+        if (existingRows.length !== valuesToWrite.length || JSON.stringify(existingRows) !== JSON.stringify(valuesToWrite)) {
+          // Clear first to avoid trailing data if new data is shorter
+          await sheets.spreadsheets.values.clear({
+            spreadsheetId: sheetId,
+            range: `'${tabName}'!A:Z`,
           });
           
           await sheets.spreadsheets.values.update({
@@ -487,7 +496,7 @@ async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, av
             valueInputOption: 'RAW',
             resource: { values: valuesToWrite }
           });
-          console.log(`Successfully split and wrote ${filtered.length} rows to "${tabName}"`);
+          console.log(`Successfully split and synced ${filtered.length} rows to "${tabName}"`);
         }
       }
     } catch (err) {

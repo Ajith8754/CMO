@@ -422,17 +422,19 @@ const { google } = require('googleapis');
 const path = require('path');
 const fs = require('fs');
 
+const DEFAULT_SHEET_ID = '1rfqH_VKMWxP5lOl9l7kpsm4UMjPPfaKBkIO42jEa4Z4';
+
 function getGoogleSheetIdForSystem(system) {
   if (system === 'camdrum' || system === 'camdrom') {
-    return process.env.CAMDRUM_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    return process.env.CAMDRUM_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
   }
   if (system === 'mechanical') {
-    return process.env.MECHANICAL_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    return process.env.MECHANICAL_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
   }
   if (system === 'ord') {
-    return process.env.ORD_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    return process.env.ORD_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
   }
-  return process.env.GOOGLE_SHEET_ID;
+  return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
 }
 
 async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, availableSheets) {
@@ -580,12 +582,13 @@ async function getGoogleSheetsData(requestedSheet, system) {
     throw new Error(`Sheet ID not configured for system: ${system}`);
   }
   
+  console.log(`[Google Sheets] Querying system: "${system}", sheetId: "${sheetId}", requestedSheet: "${requestedSheet}"`);
   let availableTitles = ['summary'];
   try {
     const metaRes = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
     availableTitles = (metaRes.data.sheets || []).map(s => s.properties.title).filter(Boolean);
   } catch (err) {
-    console.error('Error fetching sheet metadata:', err.message);
+    console.error(`Error fetching sheet metadata for sheetId "${sheetId}":`, err.message);
   }
 
   let targetSheet = requestedSheet;
@@ -593,6 +596,7 @@ async function getGoogleSheetsData(requestedSheet, system) {
     const summaryTab = availableTitles.find(t => t.toLowerCase() === 'summary');
     targetSheet = summaryTab || availableTitles[0] || 'summary';
   }
+  console.log(`[Google Sheets] Fetching range from targetSheet: "${targetSheet}"`);
   
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,

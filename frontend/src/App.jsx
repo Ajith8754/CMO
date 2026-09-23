@@ -888,9 +888,13 @@ export default function App() {
                   const range = calculatedRange;
 
                   const latestRecord = filteredList.length > 0 ? filteredList[filteredList.length - 1] : null;
-                  const currentEngineer = latestRecord ? (latestRecord['TEST ENGINNER'] || latestRecord['TEST ENGINEER'] || latestRecord['Engineer'] || 'N/A') : 'N/A';
+                  const currentEngineer = latestRecord ? (
+                    getFieldValue(latestRecord, ['Engineer', 'engineer', 'ENGINEER', 'TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER']) || 'N/A'
+                  ) : 'N/A';
                   
                   const rangeColKey = latestRecord ? Object.keys(latestRecord).find(k => 
+                    k.toUpperCase().includes('TOTAL COVERED') || 
+                    k.toUpperCase().includes('DAILY COVERED') || 
                     k.toUpperCase().includes('RANGE') || 
                     k.toUpperCase().includes('KM') || 
                     k.toUpperCase().includes('DISTANCE')
@@ -899,16 +903,15 @@ export default function App() {
                     ? parseFloat(String(latestRecord[rangeColKey]).replace(/[^0-9.]/g, '')) || 0 
                     : 0;
 
-                  const currentDecision = latestRecord ? String(latestRecord['TEST DECISION'] || latestRecord['Decision'] || 'N/A').toUpperCase().trim() : 'N/A';
-                  const isPass = currentDecision === 'PASSED' || currentDecision === 'PASS';
-                  const isFail = currentDecision === 'FAILED' || currentDecision === 'FAIL';
+                  const currentDecision = latestRecord ? String(getFieldValue(latestRecord, ['status', 'Status', 'STATUS', 'TEST DECISION', 'Decision', 'failure', 'Failure']) || 'N/A').toUpperCase().trim() : 'N/A';
+                  const isPass = currentDecision === 'PASSED' || currentDecision === 'PASS' || currentDecision === 'NO';
+                  const isFail = currentDecision === 'FAILED' || currentDecision === 'FAIL' || currentDecision === 'YES';
                   const decisionColor = isPass ? 'green' : (isFail ? 'red' : 'yellow');
 
                   const getRemarks = () => {
                     if (!latestRecord) return 'N/A';
-                    const keys = Object.keys(latestRecord);
-                    const remarkKey = keys.find(k => k.toUpperCase().includes('REMARK') || k.toUpperCase().includes('COMMENT') || k.toUpperCase().includes('NOTE'));
-                    if (remarkKey && latestRecord[remarkKey]) return latestRecord[remarkKey];
+                    const remarkVal = getFieldValue(latestRecord, ['remark', 'Remark', 'REMARK', 'remarks', 'Remarks', 'REMARKS', 'Comments', 'Note', 'issue & observation', 'Issue & Observation']);
+                    if (remarkVal) return remarkVal;
                     return latestRecord['TEST DECISION'] || 'N/A';
                   };
                   const currentRemarks = getRemarks();
@@ -927,12 +930,19 @@ export default function App() {
                     return new Date(dStr);
                   };
 
-                  const sortedByDate = [...filteredList]
-                    .filter(r => r['REPORT DATE'])
-                    .sort((a, b) => parseDate(a['REPORT DATE']) - parseDate(b['REPORT DATE']));
+                  const getStartDateStr = (r) => getFieldValue(r, ['Test start date', 'test start date', 'start date', 'Start Date', 'test date', 'Test Date', 'TEST DATE', 'REPORT DATE', 'Report Date']);
+                  const getEndDateStr = (r) => getFieldValue(r, ['test end date', 'Test End Date', 'end date', 'End Date', 'REPORT DATE', 'Report Date', 'test date', 'Test Date']);
+
+                  const sortedByStartDate = [...filteredList]
+                    .filter(r => getStartDateStr(r))
+                    .sort((a, b) => parseDate(getStartDateStr(a)) - parseDate(getStartDateStr(b)));
+
+                  const sortedByEndDate = [...filteredList]
+                    .filter(r => getEndDateStr(r))
+                    .sort((a, b) => parseDate(getEndDateStr(a)) - parseDate(getEndDateStr(b)));
                   
-                  const testStartDate = sortedByDate.length > 0 ? sortedByDate[0]['REPORT DATE'] : 'N/A';
-                  const testEndDate = sortedByDate.length > 0 ? sortedByDate[sortedByDate.length - 1]['REPORT DATE'] : 'N/A';
+                  const testStartDate = sortedByStartDate.length > 0 ? getStartDateStr(sortedByStartDate[0]) : 'N/A';
+                  const testEndDate = sortedByEndDate.length > 0 ? getEndDateStr(sortedByEndDate[sortedByEndDate.length - 1]) : 'N/A';
 
                   let totalHours = 0;
                   const durationColKey = latestRecord ? Object.keys(latestRecord).find(k => 
@@ -1505,21 +1515,19 @@ export default function App() {
                             <thead>
                               {view === 'camdrum' ? (
                                 <tr>
-                                  <th className="hour-col">s.no</th>
-                                  <th>timestamp</th>
-                                  <th>Email address</th>
-                                  <th>vehicle Name</th>
-                                  <th>vechile no</th>
-                                  <th>test date</th>
+                                  <th className="hour-col">S.NO</th>
+                                  <th>Vehicle Name</th>
+                                  <th>Vehicle Model</th>
+                                  <th>Vehicle VIN</th>
+                                  <th>Test start date</th>
                                   <th>test start time</th>
-                                  <th>engineer</th>
-                                  <th>shift</th>
+                                  <th>test end date</th>
+                                  <th>test end time</th>
+                                  <th>Engineer</th>
                                   <th>daily covered km</th>
                                   <th>total covered km</th>
-                                  <th>failure</th>
-                                  <th>failure image</th>
-                                  <th>remarks</th>
-                                  <th>test end time</th>
+                                  <th>status</th>
+                                  <th>remark</th>
                                 </tr>
                               ) : isMechanical ? (
                                 <tr>
@@ -1554,33 +1562,32 @@ export default function App() {
                               {currentTvRecords.length > 0 ? (
                                 currentTvRecords.map((r, idx) => {
                                   if (view === 'camdrum') {
-                                    const failureVal = getFieldValue(r, ['failure', 'Failure', 'TEST DECISION', 'TEST STATUS', 'Decision', 'Status']);
-                                    const statusUpper = failureVal.toUpperCase();
-                                    const decisionClass = (statusUpper.includes('FAIL') || statusUpper === 'YES' || statusUpper === 'FAILED') 
-                                      ? 'failed' 
-                                      : ((statusUpper.includes('HOLD') || statusUpper.includes('HELD')) ? 'held' : 'passed');
+                                    const statusVal = getFieldValue(r, ['status', 'Status', 'STATUS', 'failure', 'Failure', 'TEST DECISION', 'TEST STATUS', 'Decision']);
+                                    const statusUpper = statusVal.toUpperCase();
+                                    const isFailed = statusUpper.includes('FAIL') || statusUpper === 'YES' || statusUpper === 'FAILED';
+                                    const isHeld = statusUpper.includes('HOLD') || statusUpper.includes('HELD');
+                                    const decisionClass = isFailed ? 'failed' : (isHeld ? 'held' : 'passed');
+                                    const displayStatus = statusVal ? (statusVal.toLowerCase() === 'no' ? 'Passed' : statusVal) : 'Passed';
 
                                     return (
                                       <tr key={idx} className="table-row">
                                         <td className="hour-cell font-bold">{getFieldValue(r, ['s.no', 'S.No', 'S.NO', 'sl no', 'SL NO', 'Sl No', 'Serial Number', 'SL.NO', 'sl.no'])}</td>
-                                        <td>{getFieldValue(r, ['timestamp', 'Timestamp', 'TIMESTAMP', 'time stamp', 'Time Stamp'])}</td>
-                                        <td>{getFieldValue(r, ['Email address', 'Email Address', 'email address', 'Email', 'email', 'EMAIL ADDRESS'])}</td>
-                                        <td>{getFieldValue(r, ['vehicle Name', 'Vehicle Name', 'vehicle name', 'VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model'])}</td>
-                                        <td>{getFieldValue(r, ['vechile no', 'Vechile No', 'vechile No', 'Vechile no', 'vehicle no', 'Vehicle No', 'Vehicle Number'])}</td>
-                                        <td>{getFieldValue(r, ['test date', 'Test Date', 'test date', 'Date', 'TEST DATE'])}</td>
-                                        <td>{getFieldValue(r, ['test start time', 'Test Start Time', 'test start time', 'Start Time', 'start time'])}</td>
-                                        <td>{getFieldValue(r, ['engineer', 'Engineer', 'ENGINEER', 'TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER'])}</td>
-                                        <td>{getFieldValue(r, ['shift', 'Shift', 'SHIFT'])}</td>
-                                        <td>{getFieldValue(r, ['daily covered km', 'Daily Covered Km', 'daily covered KM', 'covered km', 'Daily Covered KM', 'Daily covered km'])}</td>
-                                        <td>{getFieldValue(r, ['total covered km', 'Total Covered Km', 'total covered KM', 'Total Covered KM', 'Total covered km'])}</td>
+                                        <td>{getFieldValue(r, ['vechile Name', 'Vechile Name', 'vechile name', 'VECHILE NAME', 'vehicle Name', 'Vehicle Name', 'vehicle name', 'VEHICLE NAME'])}</td>
+                                        <td>{getFieldValue(r, ['vechile Model', 'Vechile Model', 'vechile model', 'vehicle Model', 'Vehicle Model', 'vehicle model', 'VEHICLE MODEL', 'Model', 'model'])}</td>
+                                        <td>{getFieldValue(r, ['Vechile VIN', 'vechile vin', 'Vehicle VIN', 'vehicle vin', 'VEHICLE VIN', 'VIN', 'vin', 'vechile no', 'Vechile No', 'vechile No', 'Vechile no', 'vehicle no', 'Vehicle No', 'Vehicle Number'])}</td>
+                                        <td>{getFieldValue(r, ['Test start date', 'test start date', 'TEST START DATE', 'start date', 'Start Date', 'test date', 'Test Date', 'TEST DATE', 'Date', 'date'])}</td>
+                                        <td>{getFieldValue(r, ['test start time', 'Test Start Time', 'TEST START TIME', 'start time', 'Start Time', 'START TIME'])}</td>
+                                        <td>{getFieldValue(r, ['test end date', 'Test End Date', 'TEST END DATE', 'end date', 'End Date', 'report date', 'Report Date', 'REPORT DATE'])}</td>
+                                        <td>{getFieldValue(r, ['test end time', 'Test End Time', 'TEST END TIME', 'end time', 'End Time', 'END TIME'])}</td>
+                                        <td>{getFieldValue(r, ['Engineer', 'engineer', 'ENGINEER', 'TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER', 'TEST ENGINER'])}</td>
+                                        <td>{getFieldValue(r, ['daily covered km', 'Daily Covered Km', 'daily covered KM', 'Daily Covered KM', 'Daily covered km', 'covered km', 'Covered Km', 'DAILY COVERED KM'])}</td>
+                                        <td>{getFieldValue(r, ['total covered km', 'Total Covered Km', 'total covered KM', 'Total Covered KM', 'Total covered km', 'TOTAL COVERED KM', 'range', 'Range'])}</td>
                                         <td>
                                           <span className={`status-badge ${decisionClass}`}>
-                                            {failureVal || 'No'}
+                                            {displayStatus}
                                           </span>
                                         </td>
-                                        <td>{getFieldValue(r, ['failure image', 'Failure Image', 'failure Image', 'Image', 'image'])}</td>
-                                        <td>{getFieldValue(r, ['remarks', 'Remarks', 'REMARKS', 'Comments', 'Note'])}</td>
-                                        <td>{getFieldValue(r, ['test end time', 'Test End Time', 'test end time', 'End Time', 'end time'])}</td>
+                                        <td>{getFieldValue(r, ['remark', 'Remark', 'REMARK', 'remarks', 'Remarks', 'REMARKS', 'Comments', 'Note', 'issue & observation', 'Issue & Observation'])}</td>
                                       </tr>
                                     );
                                   } else if (isMechanical) {
@@ -1631,7 +1638,7 @@ export default function App() {
                                 })
                               ) : (
                                 <tr>
-                                  <td colSpan={view === 'camdrum' ? 15 : (isMechanical ? 12 : 9)} className="text-center py-4 text-muted" style={{ textAlign: 'center', padding: '2rem' }}>
+                                  <td colSpan={view === 'camdrum' ? 13 : (isMechanical ? 12 : 9)} className="text-center py-4 text-muted" style={{ textAlign: 'center', padding: '2rem' }}>
                                     No matching records found.
                                   </td>
                                 </tr>
@@ -1756,21 +1763,19 @@ export default function App() {
                       <thead>
                         {view === 'camdrum' ? (
                           <tr>
-                            <th className="hour-col">s.no</th>
-                            <th>timestamp</th>
-                            <th>Email address</th>
-                            <th>vehicle Name</th>
-                            <th>vechile no</th>
-                            <th>test date</th>
+                            <th className="hour-col">S.NO</th>
+                            <th>Vehicle Name</th>
+                            <th>Vehicle Model</th>
+                            <th>Vehicle VIN</th>
+                            <th>Test start date</th>
                             <th>test start time</th>
-                            <th>engineer</th>
-                            <th>shift</th>
+                            <th>test end date</th>
+                            <th>test end time</th>
+                            <th>Engineer</th>
                             <th>daily covered km</th>
                             <th>total covered km</th>
-                            <th>failure</th>
-                            <th>failure image</th>
-                            <th>remarks</th>
-                            <th>test end time</th>
+                            <th>status</th>
+                            <th>remark</th>
                           </tr>
                         ) : isMechanical ? (
                           <tr>
@@ -1805,33 +1810,32 @@ export default function App() {
                         {currentTvRecords.length > 0 ? (
                           currentTvRecords.map((r, idx) => {
                             if (view === 'camdrum') {
-                              const failureVal = getFieldValue(r, ['failure', 'Failure', 'TEST DECISION', 'TEST STATUS', 'Decision', 'Status']);
-                              const statusUpper = failureVal.toUpperCase();
-                              const decisionClass = (statusUpper.includes('FAIL') || statusUpper === 'YES' || statusUpper === 'FAILED') 
-                                ? 'failed' 
-                                : ((statusUpper.includes('HOLD') || statusUpper.includes('HELD')) ? 'held' : 'passed');
+                              const statusVal = getFieldValue(r, ['status', 'Status', 'STATUS', 'failure', 'Failure', 'TEST DECISION', 'TEST STATUS', 'Decision']);
+                              const statusUpper = statusVal.toUpperCase();
+                              const isFailed = statusUpper.includes('FAIL') || statusUpper === 'YES' || statusUpper === 'FAILED';
+                              const isHeld = statusUpper.includes('HOLD') || statusUpper.includes('HELD');
+                              const decisionClass = isFailed ? 'failed' : (isHeld ? 'held' : 'passed');
+                              const displayStatus = statusVal ? (statusVal.toLowerCase() === 'no' ? 'Passed' : statusVal) : 'Passed';
 
                               return (
                                 <tr key={idx} className="table-row">
                                   <td className="hour-cell font-bold">{getFieldValue(r, ['s.no', 'S.No', 'S.NO', 'sl no', 'SL NO', 'Sl No', 'Serial Number', 'SL.NO', 'sl.no'])}</td>
-                                  <td>{getFieldValue(r, ['timestamp', 'Timestamp', 'TIMESTAMP', 'time stamp', 'Time Stamp'])}</td>
-                                  <td>{getFieldValue(r, ['Email address', 'Email Address', 'email address', 'Email', 'email', 'EMAIL ADDRESS'])}</td>
-                                  <td>{getFieldValue(r, ['vehicle Name', 'Vehicle Name', 'vehicle name', 'VEHICLE MODEL', 'Vehicle Model', 'vehicle model', 'Model'])}</td>
-                                  <td>{getFieldValue(r, ['vechile no', 'Vechile No', 'vechile No', 'Vechile no', 'vehicle no', 'Vehicle No', 'Vehicle Number'])}</td>
-                                  <td>{getFieldValue(r, ['test date', 'Test Date', 'test date', 'Date', 'TEST DATE'])}</td>
-                                  <td>{getFieldValue(r, ['test start time', 'Test Start Time', 'test start time', 'Start Time', 'start time'])}</td>
-                                  <td>{getFieldValue(r, ['engineer', 'Engineer', 'ENGINEER', 'TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER'])}</td>
-                                  <td>{getFieldValue(r, ['shift', 'Shift', 'SHIFT'])}</td>
-                                  <td>{getFieldValue(r, ['daily covered km', 'Daily Covered Km', 'daily covered KM', 'covered km', 'Daily Covered KM', 'Daily covered km'])}</td>
-                                  <td>{getFieldValue(r, ['total covered km', 'Total Covered Km', 'total covered KM', 'Total Covered KM', 'Total covered km'])}</td>
+                                  <td>{getFieldValue(r, ['vechile Name', 'Vechile Name', 'vechile name', 'VECHILE NAME', 'vehicle Name', 'Vehicle Name', 'vehicle name', 'VEHICLE NAME'])}</td>
+                                  <td>{getFieldValue(r, ['vechile Model', 'Vechile Model', 'vechile model', 'vehicle Model', 'Vehicle Model', 'vehicle model', 'VEHICLE MODEL', 'Model', 'model'])}</td>
+                                  <td>{getFieldValue(r, ['Vechile VIN', 'vechile vin', 'Vehicle VIN', 'vehicle vin', 'VEHICLE VIN', 'VIN', 'vin', 'vechile no', 'Vechile No', 'vechile No', 'Vechile no', 'vehicle no', 'Vehicle No', 'Vehicle Number'])}</td>
+                                  <td>{getFieldValue(r, ['Test start date', 'test start date', 'TEST START DATE', 'start date', 'Start Date', 'test date', 'Test Date', 'TEST DATE', 'Date', 'date'])}</td>
+                                  <td>{getFieldValue(r, ['test start time', 'Test Start Time', 'TEST START TIME', 'start time', 'Start Time', 'START TIME'])}</td>
+                                  <td>{getFieldValue(r, ['test end date', 'Test End Date', 'TEST END DATE', 'end date', 'End Date', 'report date', 'Report Date', 'REPORT DATE'])}</td>
+                                  <td>{getFieldValue(r, ['test end time', 'Test End Time', 'TEST END TIME', 'end time', 'End Time', 'END TIME'])}</td>
+                                  <td>{getFieldValue(r, ['Engineer', 'engineer', 'ENGINEER', 'TEST ENGINEER', 'Test Engineer', 'test engineer', 'TEST ENGINNER', 'TEST ENGINER'])}</td>
+                                  <td>{getFieldValue(r, ['daily covered km', 'Daily Covered Km', 'daily covered KM', 'Daily Covered KM', 'Daily covered km', 'covered km', 'Covered Km', 'DAILY COVERED KM'])}</td>
+                                  <td>{getFieldValue(r, ['total covered km', 'Total Covered Km', 'total covered KM', 'Total Covered KM', 'Total covered km', 'TOTAL COVERED KM', 'range', 'Range'])}</td>
                                   <td>
                                     <span className={`status-badge ${decisionClass}`}>
-                                      {failureVal || 'No'}
+                                      {displayStatus}
                                     </span>
                                   </td>
-                                  <td>{getFieldValue(r, ['failure image', 'Failure Image', 'failure Image', 'Image', 'image'])}</td>
-                                  <td>{getFieldValue(r, ['remarks', 'Remarks', 'REMARKS', 'Comments', 'Note'])}</td>
-                                  <td>{getFieldValue(r, ['test end time', 'Test End Time', 'test end time', 'End Time', 'end time'])}</td>
+                                  <td>{getFieldValue(r, ['remark', 'Remark', 'REMARK', 'remarks', 'Remarks', 'REMARKS', 'Comments', 'Note', 'issue & observation', 'Issue & Observation'])}</td>
                                 </tr>
                               );
                             } else if (isMechanical) {
@@ -1882,7 +1886,7 @@ export default function App() {
                           })
                         ) : (
                           <tr>
-                            <td colSpan={view === 'camdrum' ? 15 : (isMechanical ? 12 : 9)} className="text-center py-4 text-muted" style={{ textAlign: 'center', padding: '2rem' }}>
+                            <td colSpan={view === 'camdrum' ? 13 : (isMechanical ? 12 : 9)} className="text-center py-4 text-muted" style={{ textAlign: 'center', padding: '2rem' }}>
                               No matching records found.
                             </td>
                           </tr>

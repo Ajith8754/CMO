@@ -517,8 +517,11 @@ function getGoogleCredentials() {
   const possiblePaths = [
     process.env.GOOGLE_CREDENTIALS_PATH ? path.resolve(__dirname, process.env.GOOGLE_CREDENTIALS_PATH) : null,
     process.env.GOOGLE_CREDENTIALS_PATH,
+    path.resolve(__dirname, './google-credentials-cmo.json'),
     path.resolve(__dirname, './google-credentials-tv.json'),
+    path.resolve(__dirname, '../google-credentials-cmo.json'),
     path.resolve(__dirname, '../google-credentials-tv.json'),
+    '/etc/secrets/google-credentials-cmo.json',
     '/etc/secrets/google-credentials-tv.json'
   ].filter(Boolean);
 

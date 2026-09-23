@@ -7,7 +7,7 @@ import {
   Calendar, CalendarCheck
 } from 'lucide-react';
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://cmo-backend-oqif.onrender.com');
+const BACKEND_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://cmo-66xj.onrender.com');
 
 // Multi-point trend chart representing the entire Excel dataset
 function TimelineChart({ dataset, systemKey, metricKey, activeHour, color, label, unit, min, max }) {

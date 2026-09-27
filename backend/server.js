@@ -424,17 +424,26 @@ const fs = require('fs');
 
 const DEFAULT_SHEET_ID = '1rfqH_VKMWxP5lOl9l7kpsm4UMjPPfaKBkIO42jEa4Z4';
 
+function cleanSheetId(id) {
+  if (!id) return '';
+  id = String(id).trim();
+  const match = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) return match[1];
+  return id;
+}
+
 function getGoogleSheetIdForSystem(system) {
+  let id = '';
   if (system === 'camdrum' || system === 'camdrom') {
-    return process.env.CAMDRUM_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
+    id = process.env.CAMDRUM_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
+  } else if (system === 'mechanical') {
+    id = process.env.MECHANICAL_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
+  } else if (system === 'ord') {
+    id = process.env.ORD_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
+  } else {
+    id = process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
   }
-  if (system === 'mechanical') {
-    return process.env.MECHANICAL_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
-  }
-  if (system === 'ord') {
-    return process.env.ORD_SHEET_ID || process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
-  }
-  return process.env.GOOGLE_SHEET_ID || DEFAULT_SHEET_ID;
+  return cleanSheetId(id);
 }
 
 async function splitAndWriteBackToGoogleSheets(auth, sheetId, summaryRecords, availableSheets) {
@@ -551,12 +560,21 @@ async function getGoogleSheetsTabs(system) {
     });
     
     const sheets = google.sheets({ version: 'v4', auth });
-    const sheetId = getGoogleSheetIdForSystem(system);
+    let sheetId = getGoogleSheetIdForSystem(system);
     if (!sheetId) return ['overall', 'summary', '5kwh', '3.7kwh'];
 
-    const res = await sheets.spreadsheets.get({
-      spreadsheetId: sheetId,
-    });
+    let res;
+    try {
+      res = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    } catch (sheetErr) {
+      if (sheetId !== DEFAULT_SHEET_ID) {
+        console.warn(`[Google Sheets] Sheet "${sheetId}" failed (${sheetErr.message}). Falling back to default sheet "${DEFAULT_SHEET_ID}"`);
+        sheetId = DEFAULT_SHEET_ID;
+        res = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+      } else {
+        throw sheetErr;
+      }
+    }
 
     const sheetTitles = (res.data.sheets || []).map(s => s.properties.title).filter(Boolean);
     return sheetTitles.length > 0 ? sheetTitles : ['summary'];
@@ -577,7 +595,7 @@ async function getGoogleSheetsData(requestedSheet, system) {
   });
   
   const sheets = google.sheets({ version: 'v4', auth });
-  const sheetId = getGoogleSheetIdForSystem(system);
+  let sheetId = getGoogleSheetIdForSystem(system);
   if (!sheetId) {
     throw new Error(`Sheet ID not configured for system: ${system}`);
   }
@@ -589,6 +607,16 @@ async function getGoogleSheetsData(requestedSheet, system) {
     availableTitles = (metaRes.data.sheets || []).map(s => s.properties.title).filter(Boolean);
   } catch (err) {
     console.error(`Error fetching sheet metadata for sheetId "${sheetId}":`, err.message);
+    if (sheetId !== DEFAULT_SHEET_ID) {
+      console.warn(`[Google Sheets] Falling back to default sheetId "${DEFAULT_SHEET_ID}"...`);
+      try {
+        sheetId = DEFAULT_SHEET_ID;
+        const fallbackRes = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+        availableTitles = (fallbackRes.data.sheets || []).map(s => s.properties.title).filter(Boolean);
+      } catch (fbErr) {
+        console.error(`Fallback sheet also failed:`, fbErr.message);
+      }
+    }
   }
 
   let targetSheet = requestedSheet;
@@ -598,10 +626,24 @@ async function getGoogleSheetsData(requestedSheet, system) {
   }
   console.log(`[Google Sheets] Fetching range from targetSheet: "${targetSheet}"`);
   
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `'${targetSheet}'!A:P`,
-  });
+  let response;
+  try {
+    response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `'${targetSheet}'!A:P`,
+    });
+  } catch (valErr) {
+    if (sheetId !== DEFAULT_SHEET_ID) {
+      console.warn(`[Google Sheets] values.get failed for "${sheetId}". Retrying with default sheet "${DEFAULT_SHEET_ID}"...`);
+      sheetId = DEFAULT_SHEET_ID;
+      response = await sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: `'${targetSheet}'!A:P`,
+      });
+    } else {
+      throw valErr;
+    }
+  }
   
   const rows = response.data.values || [];
   if (rows.length === 0) return { records: [], activeSheet: targetSheet, availableSheets: availableTitles };
@@ -730,6 +772,21 @@ app.get('/api/tv-data', async (req, res) => {
     console.error('Google Sheets Sync Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+app.get('/api/health-sheets', (req, res) => {
+  const credentials = getGoogleCredentials();
+  res.json({
+    success: true,
+    hasCredentials: !!credentials,
+    clientEmail: credentials ? credentials.client_email : null,
+    sheetIds: {
+      camdrum: getGoogleSheetIdForSystem('camdrum'),
+      mechanical: getGoogleSheetIdForSystem('mechanical'),
+      ord: getGoogleSheetIdForSystem('ord'),
+      default: DEFAULT_SHEET_ID
+    }
+  });
 });
 
 if (require.main === module) {
